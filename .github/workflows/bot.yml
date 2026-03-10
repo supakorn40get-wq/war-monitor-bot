@@ -1,0 +1,26 @@
+name: War Monitor Bot
+on:
+  schedule:
+    - cron: '0 */5 * * *' # สั่งให้ระบบเริ่มรันใหม่ทุกๆ 5 ชั่วโมง (กันระบบแอบหลับ)
+  workflow_dispatch: # สร้างปุ่มให้เรากดเริ่มรันเองได้ด้วย
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          
+      - name: Install Dependencies
+        run: |
+          pip install -r requirements.txt
+          playwright install chromium
+          playwright install-deps chromium
+          
+      - name: Run Bot 24/7
+        timeout-minutes: 300 # อนุญาตให้รันต่อเนื่องได้ 5 ชั่วโมงก่อนเริ่มรอบใหม่
+        run: python bot.py
