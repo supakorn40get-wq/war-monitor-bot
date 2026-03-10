@@ -3,8 +3,6 @@ import requests
 import nest_asyncio
 import feedparser
 import asyncio
-import threading
-from flask import Flask
 from playwright.async_api import async_playwright
 
 nest_asyncio.apply()
@@ -14,14 +12,6 @@ TELEGRAM_TOKEN = "8722326137:AAGFB2lBVtwci5A6hLfzfyjhBvQ7kyTSRG0"
 CHAT_ID = "1231426206"
 URL = "https://finance.worldmonitor.app/?lat=20.0000&lon=0.0000&zoom=1.00&view=global&timeRange=7d&layers=cables%2Cpipelines%2Csanctions%2Cweather%2Ceconomic%2Cwaterways%2Coutages%2Cnatural%2CtradeRoutes"
 WAR_KEYWORDS = ["war", "attack", "strike", "missile", "explosion", "bombing", "invasion"]
-
-app = Flask(__name__)
-@app.route('/')
-def home():
-    return "Bot is running online 24/7!"
-
-def run_flask():
-    app.run(host="0.0.0.0", port=10000)
 
 def send_telegram_photo(photo_path, caption):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto"
@@ -52,22 +42,21 @@ async def capture_dashboard(headline):
         page = await browser.new_page()
         await page.set_viewport_size({"width": 1920, "height": 1080})
         
-        # เพิ่มเวลาโหลดให้เซิร์ฟเวอร์ฟรีหายใจ (120 วิ)
-        await page.goto(URL, timeout=120000)
+        # สเปคเครื่อง GitHub แรง โหลดเว็บเสร็จไวแน่นอน
+        await page.goto(URL, timeout=60000)
         await page.wait_for_timeout(10000) 
         
         try:
             pop_up_button = page.locator("text=/Got it/i").first
-            await pop_up_button.wait_for(state="visible", timeout=10000)
+            await pop_up_button.wait_for(state="visible", timeout=5000)
             await pop_up_button.click(force=True)
         except:
             pass 
             
-        await page.wait_for_timeout(15000) 
+        await page.wait_for_timeout(10000) 
         screenshot_path = "war_alert.png"
         
-        # เพิ่มเวลาตอนแคปจอเป็น 60 วิ
-        await page.screenshot(path=screenshot_path, timeout=60000)
+        await page.screenshot(path=screenshot_path, timeout=30000)
         await browser.close()
         
         caption = f"🚨 **ด่วน! ตรวจพบสถานการณ์ความรุนแรง** 🚨\n\n📰 หัวข้อข่าว:\n{headline}"
@@ -76,16 +65,14 @@ async def capture_dashboard(headline):
 async def start_monitor():
     seen_news = set()
     
-    # ทดสอบระบบ: ให้ส่งรูปเข้า Telegram 1 ครั้งตอนเริ่มเปิดบอททันที!
-    await capture_dashboard("✅ (TEST) เริ่มต้นระบบเฝ้าระวัง 24/7 เรียบร้อยแล้ว พร้อมทำงาน!")
+    # ส่งรูปทดสอบเครื่องใหม่
+    await capture_dashboard("✅ (TEST) อัปเกรดระบบมารันบน GitHub เครื่องแรงกว่าเดิม พร้อมทำงาน!")
     
     while True:
         headline = check_breaking_news(seen_news)
         if headline:
             await capture_dashboard(headline)
-        await asyncio.sleep(600)
+        await asyncio.sleep(600) # รอ 10 นาที
 
 if __name__ == "__main__":
-    t = threading.Thread(target=run_flask)
-    t.start()
     asyncio.run(start_monitor())
