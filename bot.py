@@ -15,7 +15,6 @@ CHAT_ID = "1231426206"
 URL = "https://finance.worldmonitor.app/?lat=20.0000&lon=0.0000&zoom=1.00&view=global&timeRange=7d&layers=cables%2Cpipelines%2Csanctions%2Cweather%2Ceconomic%2Cwaterways%2Coutages%2Cnatural%2CtradeRoutes"
 WAR_KEYWORDS = ["war", "attack", "strike", "missile", "explosion", "bombing", "invasion"]
 
-# === 2. สร้างเว็บเซิร์ฟเวอร์หลอก (เพื่อให้ Render ไม่ปิดการทำงาน) ===
 app = Flask(__name__)
 @app.route('/')
 def home():
@@ -24,7 +23,6 @@ def home():
 def run_flask():
     app.run(host="0.0.0.0", port=10000)
 
-# === 3. โค้ดบอทเฝ้าจอ (เหมือนเดิม) ===
 def send_telegram_photo(photo_path, caption):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto"
     with open(photo_path, "rb") as photo:
@@ -53,17 +51,23 @@ async def capture_dashboard(headline):
         browser = await p.chromium.launch(headless=True)
         page = await browser.new_page()
         await page.set_viewport_size({"width": 1920, "height": 1080})
-        await page.goto(URL, timeout=60000)
-        await page.wait_for_timeout(5000) 
+        
+        # เพิ่มเวลาโหลดให้เซิร์ฟเวอร์ฟรีหายใจ (120 วิ)
+        await page.goto(URL, timeout=120000)
+        await page.wait_for_timeout(10000) 
+        
         try:
             pop_up_button = page.locator("text=/Got it/i").first
             await pop_up_button.wait_for(state="visible", timeout=10000)
             await pop_up_button.click(force=True)
         except:
             pass 
+            
         await page.wait_for_timeout(15000) 
         screenshot_path = "war_alert.png"
-        await page.screenshot(path=screenshot_path)
+        
+        # เพิ่มเวลาตอนแคปจอเป็น 60 วิ
+        await page.screenshot(path=screenshot_path, timeout=60000)
         await browser.close()
         
         caption = f"🚨 **ด่วน! ตรวจพบสถานการณ์ความรุนแรง** 🚨\n\n📰 หัวข้อข่าว:\n{headline}"
@@ -71,15 +75,17 @@ async def capture_dashboard(headline):
 
 async def start_monitor():
     seen_news = set()
+    
+    # ทดสอบระบบ: ให้ส่งรูปเข้า Telegram 1 ครั้งตอนเริ่มเปิดบอททันที!
+    await capture_dashboard("✅ (TEST) เริ่มต้นระบบเฝ้าระวัง 24/7 เรียบร้อยแล้ว พร้อมทำงาน!")
+    
     while True:
         headline = check_breaking_news(seen_news)
         if headline:
             await capture_dashboard(headline)
-        await asyncio.sleep(600) # รอ 10 นาที
+        await asyncio.sleep(600)
 
 if __name__ == "__main__":
-    # เปิดเซิร์ฟเวอร์หลอกคู่ไปกับบอท
     t = threading.Thread(target=run_flask)
     t.start()
-    # เริ่มบอท
     asyncio.run(start_monitor())
