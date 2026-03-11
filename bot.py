@@ -27,7 +27,6 @@ def send_telegram_photo(photo_path, caption):
         requests.post(url, data=payload, files=files)
 
 def verify_news_with_gemini(headline):
-    # นี่คือคำสั่งที่เราใช้สั่ง Gemini ให้วิเคราะห์ข่าวครับ
     prompt = f"หัวข้อข่าวนี้: '{headline}' เป็นข่าวเกี่ยวกับสงคราม การโจมตีทางการทหาร หรือความขัดแย้งรุนแรงระหว่างประเทศของจริงหรือไม่? (ห้ามตอบว่าเป็นถ้าเป็นแค่ชื่อหนัง เกม หรือเรื่องแต่ง) ให้ตอบกลับมาแค่คำว่า 'YES' หรือ 'NO' เท่านั้น"
     try:
         response = model.generate_content(prompt)
@@ -36,6 +35,15 @@ def verify_news_with_gemini(headline):
     except Exception as e:
         print(f"Gemini Error: {e}")
         return False
+
+# === ฟังก์ชันใหม่: สั่งให้ AI แปลเป็นภาษาไทย ===
+def translate_to_thai(headline):
+    prompt = f"แปลพาดหัวข่าวนี้เป็นภาษาไทยให้สละสลวย กระชับ และเป็นภาษาข่าวที่ดูเป็นทางการ: '{headline}'"
+    try:
+        response = model.generate_content(prompt)
+        return response.text.strip()
+    except Exception as e:
+        return headline # ถ้าเกิดข้อผิดพลาด ให้ส่งภาษาอังกฤษแบบเดิมไปก่อน
 
 def check_breaking_news(seen_news):
     rss_url = "https://news.google.com/news/rss/headlines/section/topic/WORLD?hl=en-US&gl=US&ceid=US:en"
@@ -47,12 +55,16 @@ def check_breaking_news(seen_news):
             if link not in seen_news:
                 for kw in WAR_KEYWORDS:
                     if kw in title:
-                        # ถ้าเจอคำคีย์เวิร์ด ให้ส่งไปถาม Gemini ก่อน!
                         if verify_news_with_gemini(entry.title):
                             seen_news.add(link)
-                            return entry.title
+                            
+                            # สั่งแปลภาษาไทยก่อนส่ง!
+                            thai_headline = translate_to_thai(entry.title)
+                            
+                            # จัดรูปแบบข้อความให้สวยงาม มีทั้งไทยและอังกฤษ
+                            final_message = f"🇹🇭 {thai_headline}\n🇬🇧 (ต้นฉบับ: {entry.title})"
+                            return final_message
                         else:
-                            # ถ้า Gemini บอกไม่ใช่ของจริง (เช่น หนังเข้าใหม่) ให้ข้ามไปเลย
                             seen_news.add(link) 
     except Exception as e:
         pass
@@ -83,13 +95,12 @@ async def capture_dashboard(headline):
         await page.screenshot(path=screenshot_path, timeout=30000)
         await browser.close()
         
-        # อัปเดตข้อความแจ้งเตือนให้ดูโปรขึ้น
         caption = f"🚨 **AI ยืนยันสถานการณ์ความรุนแรง** 🚨\n\n📰 หัวข้อข่าว:\n{headline}"
         send_telegram_photo(screenshot_path, caption)
 
 async def start_monitor():
     seen_news = set()
-    await capture_dashboard("✅ (TEST) อัปเกรด AI วิเคราะห์ข่าวสำเร็จ บอทพร้อมทำงานแบบไร้การแจ้งเตือนหลอกแล้ว!")
+    await capture_dashboard("✅ (TEST) อัปเกรดระบบแปลภาษาไทยสำเร็จ! ข่าวต่อไปจะรายงานเป็นภาษาไทยแล้วครับ")
     
     while True:
         headline = check_breaking_news(seen_news)
