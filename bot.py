@@ -11,9 +11,12 @@ nest_asyncio.apply()
 # === 1. ตั้งค่าบอท ===
 TELEGRAM_TOKEN = "8722326137:AAGFB2lBVtwci5A6hLfzfyjhBvQ7kyTSRG0"
 CHAT_ID = "1231426206"
-GEMINI_API_KEY = "AIzaSyA0KbVHJ_7x3sewK-vQWujU71jpzRu2a0Y" # กุญแจยาวๆ ที่ขึ้นต้นด้วย AIza
+GEMINI_API_KEY = "AIzaSyA0KbVHJ_7x3sewK-vQWujU71jpzRu2a0Y" 
+
 URL = "https://finance.worldmonitor.app/?lat=20.0000&lon=0.0000&zoom=1.00&view=global&timeRange=7d&layers=cables%2Cpipelines%2Csanctions%2Cweather%2Ceconomic%2Cwaterways%2Coutages%2Cnatural%2CtradeRoutes"
-WAR_KEYWORDS = ["war", "attack", "strike", "missile", "explosion", "bombing", "invasion"]
+
+# เพิ่มคีย์เวิร์ดเกี่ยวกับทองคำและการเงินเข้าไปแล้วครับ!
+WAR_KEYWORDS = ["war", "attack", "strike", "missile", "explosion", "bombing", "invasion", "gold", "xauusd", "precious metal", "bullion"]
 
 # เปิดใช้งานสมอง Gemini
 genai.configure(api_key=GEMINI_API_KEY)
@@ -27,7 +30,8 @@ def send_telegram_photo(photo_path, caption):
         requests.post(url, data=payload, files=files)
 
 def verify_news_with_gemini(headline):
-    prompt = f"หัวข้อข่าวนี้: '{headline}' เป็นข่าวเกี่ยวกับสงคราม การโจมตีทางการทหาร หรือความขัดแย้งรุนแรงระหว่างประเทศของจริงหรือไม่? (ห้ามตอบว่าเป็นถ้าเป็นแค่ชื่อหนัง เกม หรือเรื่องแต่ง) ให้ตอบกลับมาแค่คำว่า 'YES' หรือ 'NO' เท่านั้น"
+    # อัปเดตคำสั่ง AI ให้ยอมรับข่าวที่เกี่ยวกับทองคำด้วย
+    prompt = f"หัวข้อข่าวนี้: '{headline}' เป็นข่าวเกี่ยวกับสงคราม การโจมตีทางการทหาร ความขัดแย้งรุนแรงระหว่างประเทศ หรือเป็นข่าวสำคัญที่ส่งผลกระทบต่อราคาทองคำ (Gold/XAUUSD) ของจริงหรือไม่? (ห้ามตอบว่าเป็นถ้าเป็นแค่ชื่อหนัง เกม หรือเรื่องแต่ง) ให้ตอบกลับมาแค่คำว่า 'YES' หรือ 'NO' เท่านั้น"
     try:
         response = model.generate_content(prompt)
         answer = response.text.strip().upper()
@@ -36,16 +40,16 @@ def verify_news_with_gemini(headline):
         print(f"Gemini Error: {e}")
         return False
 
-# === ฟังก์ชันใหม่: สั่งให้ AI แปลเป็นภาษาไทย ===
 def translate_to_thai(headline):
     prompt = f"แปลพาดหัวข่าวนี้เป็นภาษาไทยให้สละสลวย กระชับ และเป็นภาษาข่าวที่ดูเป็นทางการ: '{headline}'"
     try:
         response = model.generate_content(prompt)
         return response.text.strip()
     except Exception as e:
-        return headline # ถ้าเกิดข้อผิดพลาด ให้ส่งภาษาอังกฤษแบบเดิมไปก่อน
+        return headline
 
 def check_breaking_news(seen_news):
+    # ใช้หมวดหมู่ข่าว World News (ถ้าอยากได้ข่าวเศรษฐกิจเน้นๆ เปลี่ยนลิงก์ตรงนี้ได้ในอนาคตครับ)
     rss_url = "https://news.google.com/news/rss/headlines/section/topic/WORLD?hl=en-US&gl=US&ceid=US:en"
     try:
         feed = feedparser.parse(rss_url)
@@ -57,12 +61,10 @@ def check_breaking_news(seen_news):
                     if kw in title:
                         if verify_news_with_gemini(entry.title):
                             seen_news.add(link)
-                            
-                            # สั่งแปลภาษาไทยก่อนส่ง!
                             thai_headline = translate_to_thai(entry.title)
                             
-                            # จัดรูปแบบข้อความให้สวยงาม มีทั้งไทยและอังกฤษ
-                            final_message = f"🇹🇭 {thai_headline}\n🇬🇧 (ต้นฉบับ: {entry.title})"
+                            # ปรับหน้าตาข้อความแจ้งเตือนให้เข้ากับทั้งสายข่าวและสายเทรด
+                            final_message = f"🚨 **(AI Alert) ข่าวด่วนกระทบตลาด / ความมั่นคง** 🚨\n\n🇹🇭 {thai_headline}\n🇬🇧 (ต้นฉบับ: {entry.title})"
                             return final_message
                         else:
                             seen_news.add(link) 
@@ -95,12 +97,11 @@ async def capture_dashboard(headline):
         await page.screenshot(path=screenshot_path, timeout=30000)
         await browser.close()
         
-        caption = f"🚨 **AI ยืนยันสถานการณ์ความรุนแรง** 🚨\n\n📰 หัวข้อข่าว:\n{headline}"
-        send_telegram_photo(screenshot_path, caption)
+        send_telegram_photo(screenshot_path, headline)
 
 async def start_monitor():
     seen_news = set()
-    await capture_dashboard("✅ (TEST) อัปเกรดระบบแปลภาษาไทยสำเร็จ! ข่าวต่อไปจะรายงานเป็นภาษาไทยแล้วครับ")
+    await capture_dashboard("✅ (TEST) เพิ่มเรดาร์ตรวจจับข่าวทองคำ (XAUUSD) เรียบร้อยแล้ว พร้อมลุยตลาดครับ!")
     
     while True:
         headline = check_breaking_news(seen_news)
