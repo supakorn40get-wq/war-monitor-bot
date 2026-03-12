@@ -15,8 +15,12 @@ GEMINI_API_KEY = "AIzaSyA0KbVHJ_7x3sewK-vQWujU71jpzRu2a0Y"
 
 URL = "https://finance.worldmonitor.app/?lat=20.0000&lon=0.0000&zoom=1.00&view=global&timeRange=7d&layers=cables%2Cpipelines%2Csanctions%2Cweather%2Ceconomic%2Cwaterways%2Coutages%2Cnatural%2CtradeRoutes"
 
-# เพิ่มคีย์เวิร์ดเกี่ยวกับทองคำและการเงินเข้าไปแล้วครับ!
-WAR_KEYWORDS = ["war", "attack", "strike", "missile", "explosion", "bombing", "invasion", "gold", "xauusd", "precious metal", "bullion"]
+# 🎯 เพิ่มคีย์เวิร์ดข่าวเศรษฐกิจที่กระชากราคาทองคำ (XAUUSD)
+WAR_KEYWORDS = [
+    "war", "attack", "strike", "missile", "explosion", "bombing", "invasion", 
+    "gold", "xauusd", "precious metal", "bullion",
+    "fed", "inflation", "cpi", "nfp", "fomc", "interest rate", "powell"
+]
 
 # เปิดใช้งานสมอง Gemini
 genai.configure(api_key=GEMINI_API_KEY)
@@ -30,8 +34,8 @@ def send_telegram_photo(photo_path, caption):
         requests.post(url, data=payload, files=files)
 
 def verify_news_with_gemini(headline):
-    # อัปเดตคำสั่ง AI ให้ยอมรับข่าวที่เกี่ยวกับทองคำด้วย
-    prompt = f"หัวข้อข่าวนี้: '{headline}' เป็นข่าวเกี่ยวกับสงคราม การโจมตีทางการทหาร ความขัดแย้งรุนแรงระหว่างประเทศ หรือเป็นข่าวสำคัญที่ส่งผลกระทบต่อราคาทองคำ (Gold/XAUUSD) ของจริงหรือไม่? (ห้ามตอบว่าเป็นถ้าเป็นแค่ชื่อหนัง เกม หรือเรื่องแต่ง) ให้ตอบกลับมาแค่คำว่า 'YES' หรือ 'NO' เท่านั้น"
+    # อัปเดตสมอง AI ให้วิเคราะห์ข่าวเศรษฐกิจด้วย
+    prompt = f"หัวข้อข่าวนี้: '{headline}' เป็นข่าวเกี่ยวกับสงคราม ความขัดแย้งรุนแรง หรือเป็นข่าวเศรษฐกิจระดับมหภาค (เช่น FED, อัตราเงินเฟ้อ, การจ้างงาน, ดอกเบี้ย) ที่ส่งผลกระทบอย่างหนักต่อราคาทองคำ (Gold/XAUUSD) ของจริงหรือไม่? (ห้ามตอบว่าเป็นถ้าเป็นแค่ชื่อหนัง เกม หรือเรื่องแต่ง) ให้ตอบกลับมาแค่คำว่า 'YES' หรือ 'NO' เท่านั้น"
     try:
         response = model.generate_content(prompt)
         answer = response.text.strip().upper()
@@ -49,7 +53,6 @@ def translate_to_thai(headline):
         return headline
 
 def check_breaking_news(seen_news):
-    # ใช้หมวดหมู่ข่าว World News (ถ้าอยากได้ข่าวเศรษฐกิจเน้นๆ เปลี่ยนลิงก์ตรงนี้ได้ในอนาคตครับ)
     rss_url = "https://news.google.com/news/rss/headlines/section/topic/WORLD?hl=en-US&gl=US&ceid=US:en"
     try:
         feed = feedparser.parse(rss_url)
@@ -63,8 +66,7 @@ def check_breaking_news(seen_news):
                             seen_news.add(link)
                             thai_headline = translate_to_thai(entry.title)
                             
-                            # ปรับหน้าตาข้อความแจ้งเตือนให้เข้ากับทั้งสายข่าวและสายเทรด
-                            final_message = f"🚨 **(AI Alert) ข่าวด่วนกระทบตลาด / ความมั่นคง** 🚨\n\n🇹🇭 {thai_headline}\n🇬🇧 (ต้นฉบับ: {entry.title})"
+                            final_message = f"🚨 **(AI Alert) ข่าวด่วนกระทบตลาดทองคำ / ความมั่นคง** 🚨\n\n🇹🇭 {thai_headline}\n🇬🇧 (ต้นฉบับ: {entry.title})"
                             return final_message
                         else:
                             seen_news.add(link) 
@@ -101,7 +103,7 @@ async def capture_dashboard(headline):
 
 async def start_monitor():
     seen_news = set()
-    await capture_dashboard("✅ (TEST) เพิ่มเรดาร์ตรวจจับข่าวทองคำ (XAUUSD) เรียบร้อยแล้ว พร้อมลุยตลาดครับ!")
+    # 🥷 ลบคำสั่งส่งข้อความ TEST ทิ้งแล้ว บอทจะเริ่มทำงานแบบเงียบๆ ไม่กวนใจ
     
     while True:
         headline = check_breaking_news(seen_news)
