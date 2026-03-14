@@ -5,6 +5,8 @@ import feedparser
 import asyncio
 import google.generativeai as genai
 from playwright.async_api import async_playwright
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 
 nest_asyncio.apply()
 
@@ -15,14 +17,12 @@ GEMINI_API_KEY = "AIzaSyA0KbVHJ_7x3sewK-vQWujU71jpzRu2a0Y"
 
 URL = "https://finance.worldmonitor.app/?lat=20.0000&lon=0.0000&zoom=1.00&view=global&timeRange=7d&layers=cables%2Cpipelines%2Csanctions%2Cweather%2Ceconomic%2Cwaterways%2Coutages%2Cnatural%2CtradeRoutes"
 
-# 🎯 เพิ่มคีย์เวิร์ดข่าวเศรษฐกิจที่กระชากราคาทองคำ (XAUUSD)
 WAR_KEYWORDS = [
     "war", "attack", "strike", "missile", "explosion", "bombing", "invasion", 
     "gold", "xauusd", "precious metal", "bullion",
     "fed", "inflation", "cpi", "nfp", "fomc", "interest rate", "powell"
 ]
 
-# เปิดใช้งานสมอง Gemini
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel('gemini-1.5-flash')
 
@@ -34,82 +34,66 @@ def send_telegram_photo(photo_path, caption):
         requests.post(url, data=payload, files=files)
 
 def verify_news_with_gemini(headline):
-    # อัปเดตสมอง AI ให้วิเคราะห์ข่าวเศรษฐกิจด้วย
-    prompt = f"หัวข้อข่าวนี้: '{headline}' เป็นข่าวเกี่ยวกับสงคราม ความขัดแย้งรุนแรง หรือเป็นข่าวเศรษฐกิจระดับมหภาค (เช่น FED, อัตราเงินเฟ้อ, การจ้างงาน, ดอกเบี้ย) ที่ส่งผลกระทบอย่างหนักต่อราคาทองคำ (Gold/XAUUSD) ของจริงหรือไม่? (ห้ามตอบว่าเป็นถ้าเป็นแค่ชื่อหนัง เกม หรือเรื่องแต่ง) ให้ตอบกลับมาแค่คำว่า 'YES' หรือ 'NO' เท่านั้น"
+    prompt = f"หัวข้อข่าวนี้: '{headline}' เป็นข่าวเกี่ยวกับสงคราม ความขัดแย้งรุนแรง หรือข่าวเศรษฐกิจระดับมหภาคที่กระทบราคาทองคำอย่างหนัก ใช่หรือไม่? ตอบแค่ 'YES' หรือ 'NO'"
     try:
         response = model.generate_content(prompt)
-        answer = response.text.strip().upper()
-        return "YES" in answer
-    except Exception as e:
-        print(f"Gemini Error: {e}")
+        return "YES" in response.text.strip().upper()
+    except Exception:
         return False
 
 def translate_to_thai(headline):
-    prompt = f"แปลพาดหัวข่าวนี้เป็นภาษาไทยให้สละสลวย กระชับ และเป็นภาษาข่าวที่ดูเป็นทางการ: '{headline}'"
+    prompt = f"แปลพาดหัวข่าวนี้เป็นภาษาไทยให้สละสลวย กระชับ และเป็นภาษาข่าว: '{headline}'"
     try:
         response = model.generate_content(prompt)
         return response.text.strip()
-    except Exception as e:
+    except Exception:
         return headline
 
-def check_breaking_news(seen_news):
+def check_breaking_news():
     rss_url = "https://news.google.com/news/rss/headlines/section/topic/WORLD?hl=en-US&gl=US&ceid=US:en"
     try:
         feed = feedparser.parse(rss_url)
+        now = datetime.now(timezone.utc)
+        
         for entry in feed.entries[:10]:
-            title = entry.title.lower()
-            link = entry.link
-            if link not in seen_news:
-                for kw in WAR_KEYWORDS:
-                    if kw in title:
-                        if verify_news_with_gemini(entry.title):
-                            seen_news.add(link)
-                            thai_headline = translate_to_thai(entry.title)
-                            
-                            final_message = f"🚨 **(AI Alert) ข่าวด่วนกระทบตลาดทองคำ / ความมั่นคง** 🚨\n\n🇹🇭 {thai_headline}\n🇬🇧 (ต้นฉบับ: {entry.title})"
-                            return final_message
-                        else:
-                            seen_news.add(link) 
-    except Exception as e:
+            try:
+                pub_date = parsedate_to_datetime(entry.published)
+                # 🎯 เช็คว่าข่าวนี้เพิ่งออกภายใน 15 นาทีที่ผ่านมา (900 วินาที) หรือไม่
+                if (now - pub_date).total_seconds() <= 900:
+                    title = entry.title.lower()
+                    for kw in WAR_KEYWORDS:
+                        if kw in title:
+                            if verify_news_with_gemini(entry.title):
+                                thai_headline = translate_to_thai(entry.title)
+                                return f"🚨 **(AI Alert) ข่าวด่วนกระทบตลาดทองคำ / ความมั่นคง** 🚨\n\n🇹🇭 {thai_headline}\n🇬🇧 (ต้นฉบับ: {entry.title})"
+            except Exception:
+                continue
+    except Exception:
         pass
     return None
 
 async def capture_dashboard(headline):
     async with async_playwright() as p:
-        browser = await p.chromium.launch(
-            headless=True,
-            args=["--autoplay-policy=no-user-gesture-required", "--mute-audio"]
-        )
+        browser = await p.chromium.launch(headless=True, args=["--autoplay-policy=no-user-gesture-required", "--mute-audio"])
         page = await browser.new_page()
         await page.set_viewport_size({"width": 1920, "height": 1080})
-        
         await page.goto(URL, timeout=60000)
         await page.wait_for_timeout(10000) 
-        
         try:
             pop_up_button = page.locator("text=/Got it/i").first
             await pop_up_button.wait_for(state="visible", timeout=5000)
             await pop_up_button.click(force=True)
         except:
             pass 
-            
         await page.wait_for_timeout(10000) 
-        screenshot_path = "war_alert.png"
-        
-        await page.screenshot(path=screenshot_path, timeout=30000)
+        await page.screenshot(path="war_alert.png", timeout=30000)
         await browser.close()
-        
-        send_telegram_photo(screenshot_path, headline)
+        send_telegram_photo("war_alert.png", headline)
 
 async def start_monitor():
-    seen_news = set()
-    # 🥷 ลบคำสั่งส่งข้อความ TEST ทิ้งแล้ว บอทจะเริ่มทำงานแบบเงียบๆ ไม่กวนใจ
-    
-    while True:
-        headline = check_breaking_news(seen_news)
-        if headline:
-            await capture_dashboard(headline)
-        await asyncio.sleep(600)
+    headline = check_breaking_news()
+    if headline:
+        await capture_dashboard(headline)
 
 if __name__ == "__main__":
     asyncio.run(start_monitor())
