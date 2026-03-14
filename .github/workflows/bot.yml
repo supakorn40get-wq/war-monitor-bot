@@ -1,8 +1,9 @@
 name: War Monitor Bot
+
 on:
   schedule:
-    - cron: '0 */5 * * *' # สั่งให้ระบบเริ่มรันใหม่ทุกๆ 5 ชั่วโมง (กันระบบแอบหลับ)
-  workflow_dispatch: # สร้างปุ่มให้เรากดเริ่มรันเองได้ด้วย
+    - cron: '*/15 * * * *'  # ตั้งปลุกให้ทำงานทุกๆ 15 นาที
+  workflow_dispatch:
 
 jobs:
   run-bot:
@@ -15,12 +16,11 @@ jobs:
         with:
           python-version: '3.10'
           
-      - name: Install Dependencies
+      - name: Install dependencies
         run: |
-          pip install -r requirements.txt
+          python -m pip install --upgrade pip
+          pip install requests feedparser google-generativeai playwright nest_asyncio
           playwright install chromium
-          playwright install-deps chromium
           
-      - name: Run Bot 24/7
-        timeout-minutes: 300 # อนุญาตให้รันต่อเนื่องได้ 5 ชั่วโมงก่อนเริ่มรอบใหม่
+      - name: Run Bot
         run: python bot.py
