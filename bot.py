@@ -34,7 +34,8 @@ def send_telegram_photo(photo_path, caption):
         requests.post(url, data=payload, files=files)
 
 def verify_news_with_gemini(headline):
-    prompt = f"หัวข้อข่าวนี้: '{headline}' เป็นข่าวเกี่ยวกับสงคราม ความขัดแย้งรุนแรง หรือข่าวเศรษฐกิจระดับมหภาคที่กระทบราคาทองคำอย่างหนัก ใช่หรือไม่? ตอบแค่ 'YES' หรือ 'NO'"
+    # 🎯 ปรับ Prompt ให้ AI "หูไว" ขึ้น ไม่ต้องรอให้รุนแรงมากก็ส่งเตือน
+    prompt = f"หัวข้อข่าวนี้: '{headline}' เป็นข่าวที่เกี่ยวข้องกับความมั่นคงระหว่างประเทศ (เช่น การทหาร, ความขัดแย้ง) หรือเป็นข่าวเศรษฐกิจ/การเงิน ที่มีโอกาสส่งผลกระทบต่อราคาทองคำ (Gold/XAUUSD) ในระยะสั้น ใช่หรือไม่? (ไม่จำเป็นต้องเป็นสงครามใหญ่) ตอบแค่ 'YES' หรือ 'NO'"
     try:
         response = model.generate_content(prompt)
         return "YES" in response.text.strip().upper()
@@ -58,8 +59,8 @@ def check_breaking_news():
         for entry in feed.entries[:10]:
             try:
                 pub_date = parsedate_to_datetime(entry.published)
-                # 🎯 เช็คว่าข่าวนี้เพิ่งออกภายใน 15 นาทีที่ผ่านมา (900 วินาที) หรือไม่
-                if (now - pub_date).total_seconds() <= 900:
+                # 🎯 ขยายเวลาสแกนเป็น 1 ชั่วโมงย้อนหลัง (3600 วินาที)
+                if (now - pub_date).total_seconds() <= 3600:
                     title = entry.title.lower()
                     for kw in WAR_KEYWORDS:
                         if kw in title:
