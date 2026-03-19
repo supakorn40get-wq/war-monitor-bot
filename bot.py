@@ -17,12 +17,6 @@ GEMINI_API_KEY = "AIzaSyA0KbVHJ_7x3sewK-vQWujU71jpzRu2a0Y"
 
 URL = "https://finance.worldmonitor.app/?lat=20.0000&lon=0.0000&zoom=1.00&view=global&timeRange=7d&layers=cables%2Cpipelines%2Csanctions%2Cweather%2Ceconomic%2Cwaterways%2Coutages%2Cnatural%2CtradeRoutes"
 
-WAR_KEYWORDS = [
-    "war", "attack", "strike", "missile", "explosion", "bombing", "invasion", 
-    "gold", "xauusd", "precious metal", "bullion",
-    "fed", "inflation", "cpi", "nfp", "fomc", "interest rate", "powell"
-]
-
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel('gemini-1.5-flash')
 
@@ -34,8 +28,7 @@ def send_telegram_photo(photo_path, caption):
         requests.post(url, data=payload, files=files)
 
 def verify_news_with_gemini(headline):
-    # 🎯 ปรับ Prompt ให้ AI "หูไว" ขึ้น ไม่ต้องรอให้รุนแรงมากก็ส่งเตือน
-    prompt = f"หัวข้อข่าวนี้: '{headline}' เป็นข่าวที่เกี่ยวข้องกับความมั่นคงระหว่างประเทศ (เช่น การทหาร, ความขัดแย้ง) หรือเป็นข่าวเศรษฐกิจ/การเงิน ที่มีโอกาสส่งผลกระทบต่อราคาทองคำ (Gold/XAUUSD) ในระยะสั้น ใช่หรือไม่? (ไม่จำเป็นต้องเป็นสงครามใหญ่) ตอบแค่ 'YES' หรือ 'NO'"
+    prompt = f"หัวข้อข่าวนี้: '{headline}' เป็นข่าวที่มีนัยสำคัญต่อตลาดการเงินโลก โดยเฉพาะราคาทองคำ (XAUUSD) หรือเป็นข่าวสงครามความรุนแรง ใช่หรือไม่? ตอบแค่ 'YES' หรือ 'NO'"
     try:
         response = model.generate_content(prompt)
         return "YES" in response.text.strip().upper()
@@ -51,22 +44,20 @@ def translate_to_thai(headline):
         return headline
 
 def check_breaking_news():
-    rss_url = "https://news.google.com/news/rss/headlines/section/topic/WORLD?hl=en-US&gl=US&ceid=US:en"
+    # 🎯 เปลี่ยนจากการดูข่าวหน้า 1 เป็นการ "ค้นหา" คีย์เวิร์ดแบบเจาะจงไปเลย
+    rss_url = "https://news.google.com/rss/search?q=XAUUSD+OR+Gold+OR+FED+OR+CPI+OR+interest+rate+OR+war+OR+missile&hl=en-US&gl=US&ceid=US:en"
     try:
         feed = feedparser.parse(rss_url)
         now = datetime.now(timezone.utc)
         
-        for entry in feed.entries[:10]:
+        for entry in feed.entries[:15]:  # ดึงมาเช็ค 15 ข่าวล่าสุด
             try:
                 pub_date = parsedate_to_datetime(entry.published)
-                # 🎯 ขยายเวลาสแกนเป็น 1 ชั่วโมงย้อนหลัง (3600 วินาที)
-                if (now - pub_date).total_seconds() <= 3600:
-                    title = entry.title.lower()
-                    for kw in WAR_KEYWORDS:
-                        if kw in title:
-                            if verify_news_with_gemini(entry.title):
-                                thai_headline = translate_to_thai(entry.title)
-                                return f"🚨 **(AI Alert) ข่าวด่วนกระทบตลาดทองคำ / ความมั่นคง** 🚨\n\n🇹🇭 {thai_headline}\n🇬🇧 (ต้นฉบับ: {entry.title})"
+                # 🎯 ขยายเวลาสแกนย้อนหลังเป็น 12 ชั่วโมง (43200 วินาที) เผื่อ GitHub แอบอู้
+                if (now - pub_date).total_seconds() <= 43200:
+                    if verify_news_with_gemini(entry.title):
+                        thai_headline = translate_to_thai(entry.title)
+                        return f"🚨 **(AI Alert) ข่าวด่วนกระทบตลาดทองคำ!** 🚨\n\n🇹🇭 {thai_headline}\n🇬🇧 (ต้นฉบับ: {entry.title})"
             except Exception:
                 continue
     except Exception:
